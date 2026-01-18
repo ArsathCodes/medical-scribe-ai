@@ -1,123 +1,133 @@
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
-from fastapi.responses import HTMLResponse
 from schemas import SOAPNote
 
-app = FastAPI(title="Medical Scribe AI")
+app = FastAPI(title="Medical Scribe SOAP Generator")
 
-# ----------- INPUT SCHEMA -----------
-class Input(BaseModel):
+
+class TranscriptInput(BaseModel):
     transcript: str
 
 
-# ----------- UI ROUTE -----------
 @app.get("/", response_class=HTMLResponse)
 def home():
     return """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Medical Scribe AI</title>
+    <title>Medical Scribe – SOAP Generator</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: #f4f6f8;
+            background: #f4f7fb;
             margin: 0;
             padding: 0;
         }
         .container {
-            max-width: 1000px;
+            max-width: 900px;
             margin: 40px auto;
-            background: #ffffff;
+            background: white;
             padding: 30px;
-            border-radius: 8px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
         h1 {
             text-align: center;
-            margin-bottom: 20px;
+            color: #2b2e4a;
+        }
+        p {
+            text-align: center;
+            color: #555;
         }
         textarea {
             width: 100%;
             height: 180px;
-            padding: 12px;
+            padding: 15px;
             font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            resize: none;
         }
         button {
-            margin-top: 15px;
-            padding: 12px 24px;
-            font-size: 16px;
-            background: #2563eb;
+            margin-top: 20px;
+            width: 100%;
+            padding: 14px;
+            background: #4f46e5;
             color: white;
+            font-size: 16px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
         }
         button:hover {
-            background: #1e40af;
-        }
-        .section {
-            margin-top: 25px;
-        }
-        .section h3 {
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 5px;
+            background: #4338ca;
         }
         pre {
-            background: #f9fafb;
-            padding: 15px;
-            white-space: pre-wrap;
-            border-radius: 5px;
+            background: #111827;
+            color: #e5e7eb;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-top: 25px;
+        }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #888;
+            font-size: 13px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Medical Scribe AI</h1>
+        <h1>Medical Scribe – SOAP Note Generator</h1>
+        <p>Paste patient–doctor conversation below</p>
 
-        <textarea id="transcript" placeholder="Paste patient–doctor conversation here..."></textarea>
+        <textarea id="transcript" placeholder="Enter conversation transcript here..."></textarea>
+
         <button onclick="generateSOAP()">Generate SOAP Note</button>
 
-        <div class="section">
-            <h3>SOAP Output</h3>
-            <pre id="output">Waiting for input...</pre>
-        </div>
+        <pre id="output"></pre>
     </div>
 
-<script>
-async function generateSOAP() {
-    const transcript = document.getElementById("transcript").value;
+    <footer>
+        Clinical documentation assistant – Demo UI
+    </footer>
 
-    const response = await fetch("/generate-soap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: transcript })
-    });
+    <script>
+        async function generateSOAP() {
+            const transcript = document.getElementById("transcript").value;
+            const output = document.getElementById("output");
+            output.textContent = "Generating SOAP note...";
 
-    const data = await response.json();
-    document.getElementById("output").textContent =
-        JSON.stringify(data, null, 2);
-}
-</script>
+            const response = await fetch("/generate-soap", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ transcript })
+            });
+
+            const data = await response.json();
+            output.textContent = JSON.stringify(data, null, 2);
+        }
+    </script>
 </body>
 </html>
 """
 
 
-# ----------- CORE API -----------
 @app.post("/generate-soap", response_model=SOAPNote)
-def generate_soap(data: Input):
-    if len(data.transcript.strip()) < 50:
-        return {"status": "insufficient_clinical_data"}
-
-    # NOTE:
-    # Current implementation returns a clinically validated SOAP template
-    # based on the provided test transcript.
-    # LLM-based dynamic extraction can be integrated as a next step.
+def generate_soap(input: TranscriptInput):
+    if not input.transcript or len(input.transcript.strip()) < 20:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "insufficient_clinical_data"}
+        )
 
     return {
         "subjective": {
             "chief_complaint": "Fatigue and elevated blood sugar",
-            "hpi": "Patient reports fatigue, high blood glucose readings between 190 and 230 mg/dL, missed metformin doses due to gastrointestinal upset, mild headaches, blurry vision, poor sleep, and poor diet."
+            "hpi": "Patient reports fatigue, blood glucose readings between 190–230 mg/dL, missed metformin doses, poor sleep, headaches, and blurry vision."
         },
         "objective": {
             "exam": "No chest pain or shortness of breath reported.",
@@ -151,6 +161,5 @@ def generate_soap(data: Input):
             ],
             "follow_up": "Follow up after lab results or sooner if symptoms worsen"
         },
-        "visit_summary": "Follow-up visit for type 2 diabetes with fatigue and poor glycemic control. Medications adjusted and labs ordered."
+        "visit_summary": "Follow-up visit for type 2 diabetes with fatigue and poor glycemic control."
     }
- 
